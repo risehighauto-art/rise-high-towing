@@ -2,361 +2,318 @@
 
 import { useState } from "react";
 
-type JobState = "offline" | "available" | "alert" | "accepted" | "on-my-way" | "arrived" | "picked-up" | "dropped-off";
+type View = "dispatch" | "providers";
+type RecoveryState = "verification" | "recovery";
 
-export default function ProviderPage() {
-  const [state, setState] = useState<JobState>("offline");
+const tows = [
+  {
+    id: "RH-2049",
+    customer: "Devon Williams",
+    vehicle: "2020 Ford Explorer",
+    route: "Garland Central → Plano West",
+    provider: "No provider yet",
+    status: "Providers alerted",
+    total: "$179.00",
+    deposit: "$44.75 paid",
+    balance: "$134.25 at arrival",
+    action: "Assign provider",
+  },
+  {
+    id: "RH-2050",
+    customer: "Monica Hill",
+    vehicle: "2014 Honda Accord",
+    route: "Mesquite North → Garland South",
+    provider: "Andre T.",
+    status: "Picked up",
+    total: "$139.00",
+    deposit: "$34.75 paid",
+    balance: "$104.25 at arrival",
+    action: "In transport",
+  },
+  {
+    id: "RH-2051",
+    customer: "Troy Daniels",
+    vehicle: "2018 Chevrolet Malibu",
+    route: "Rowlett West → Garland East",
+    provider: "No provider yet",
+    status: "New request",
+    total: "$139.00",
+    deposit: "$34.75 paid",
+    balance: "$104.25 at arrival",
+    action: "Assign provider",
+  },
+];
 
-  const nextAction = {
-    accepted: "On my way",
-    "on-my-way": "Arrived",
-    arrived: "Picked up",
-    "picked-up": "Dropped off",
-  }[state];
-
-  function advanceJob() {
-    if (state === "accepted") setState("on-my-way");
-    if (state === "on-my-way") setState("arrived");
-    if (state === "arrived") setState("picked-up");
-    if (state === "picked-up") setState("dropped-off");
-  }
+export default function OwnerPage() {
+  const [view, setView] = useState<View>("dispatch");
+  const [recoveryState, setRecoveryState] =
+    useState<RecoveryState>("verification");
 
   return (
-    <main className="provider-app">
-      <header className="provider-topbar">
-        <a href="/" className="provider-brand">
-          <span>⚡</span>
+    <main className="dashboard">
+      <aside className="sidebar">
+        <div className="brand">
+          <span>RH</span>
           <div>
-            <strong>RISE HIGH TOWING</strong>
-            <small>Provider portal</small>
+            <strong>RISE HIGH</strong>
+            <small>TOWING CONTROL</small>
           </div>
-        </a>
+        </div>
 
-        <span className="verified">Approved provider</span>
-      </header>
+        <nav>
+          <button
+            className={view === "dispatch" ? "selected-nav" : ""}
+            onClick={() => setView("dispatch")}
+          >
+            Dispatch board
+          </button>
+          <button
+            className={view === "providers" ? "selected-nav" : ""}
+            onClick={() => setView("providers")}
+          >
+            Provider approvals <b>2</b>
+          </button>
+        </nav>
 
-      <section className="provider-shell">
-        {state === "offline" && (
-          <div className="empty-state">
-            <p className="eyebrow">YOU ARE OFFLINE</p>
-            <h1>Ready to take towing jobs?</h1>
-            <p>
-              When available, you only receive private alerts that match your approved
-              service area and equipment.
-            </p>
-            <button className="primary" onClick={() => setState("available")}>
-              Go available
-            </button>
-          </div>
-        )}
+        <div className="sidebar-note">
+          <span>●</span>
+          <p>
+            <strong>Dispatch is live</strong>
+            <br />
+            Offers go only to approved, available, matching providers.
+          </p>
+        </div>
+      </aside>
 
-        {state === "available" && (
-          <div className="empty-state">
-            <p className="eyebrow">YOU ARE AVAILABLE</p>
-            <h1>Waiting for a matching tow request.</h1>
-            <p>
-              You will see the payout, vehicle type, pickup area, and drop-off area
-              before accepting any job.
-            </p>
-            <button className="primary" onClick={() => setState("alert")}>
-              Preview new job alert
-            </button>
-            <button className="text-button" onClick={() => setState("offline")}>
-              Go offline
-            </button>
-          </div>
-        )}
+      <section className="workspace">
+        {view === "dispatch" ? (
+          <>
+            <header className="heading">
+              <div>
+                <p className="eyebrow">OWNER DISPATCH</p>
+                <h1>Active towing jobs</h1>
+                <p>Every tow moves independently. Urgent response issues appear first.</p>
+              </div>
+              <button className="account">Owner account</button>
+            </header>
 
-        {state === "alert" && (
-          <section className="job-alert">
-            <p className="eyebrow">NEW TOW REQUEST</p>
-            <h1>Garland service area</h1>
+            <section className="metrics">
+              <div><span>Active now</span><strong>4</strong></div>
+              <div className="attention"><span>Needs action</span><strong>1</strong></div>
+              <div><span>On the way</span><strong>1</strong></div>
+              <div><span>Vehicles moving</span><strong>1</strong></div>
+            </section>
 
-            <div className="job-grid">
-              <Info label="Pickup" value="2.1 miles away" />
-              <Info label="Drop-off" value="Garland service area" />
-              <Info label="Vehicle" value="Passenger car, rolls and steers" />
-              <Info label="Your payout" value="$119.00" emphasis />
+            <section className={`urgent-lane ${recoveryState}`}>
+              {recoveryState === "verification" ? (
+                <>
+                  <div>
+                    <p className="eyebrow">DRIVER RESPONSE NEEDED</p>
+                    <h2>RH-2048 · Jasmine Carter</h2>
+                    <p>
+                      Marcus R. is 17 minutes past the expected arrival time.
+                      Location has not updated for 2 minutes.
+                    </p>
+                  </div>
+
+                  <div className="countdown">
+                    <span>Driver confirmation window</span>
+                    <strong>1:36</strong>
+                    <small>Customer balance has not been charged.</small>
+                  </div>
+
+                  <button
+                    className="urgent-button"
+                    onClick={() => setRecoveryState("recovery")}
+                  >
+                    Start recovery dispatch
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <p className="eyebrow">RECOVERY DISPATCH ACTIVE</p>
+                    <h2>Replacement providers alerted</h2>
+                    <p>
+                      Marcus R. is no longer assigned. Jasmine keeps her original
+                      deposit and will not be charged again.
+                    </p>
+                  </div>
+
+                  <div className="countdown success">
+                    <span>Next provider offer expires in</span>
+                    <strong>0:34</strong>
+                    <small>Two matching providers were alerted.</small>
+                  </div>
+
+                  <button className="neutral-button">
+                    Open customer update
+                  </button>
+                </>
+              )}
+            </section>
+
+            <div className="filter-row">
+              <button className="filter-active">Active</button>
+              <button>Needs action</button>
+              <button>Completed</button>
             </div>
 
-            <p className="notice">
-              The customer approved a $139 tow and paid a booking deposit. The remaining
-              balance is charged when you arrive.
-            </p>
+            <section className="tow-list">
+              {tows.map((tow) => (
+                <article className="tow-row" key={tow.id}>
+                  <div className="tow-main">
+                    <span className="job-id">{tow.id}</span>
+                    <h2>{tow.customer}</h2>
+                    <p>{tow.vehicle}</p>
+                    <strong className="route">{tow.route}</strong>
+                  </div>
 
-            <button className="primary" onClick={() => setState("accepted")}>
-              Accept job
-            </button>
-          </section>
-        )}
+                  <div>
+                    <span className={`status ${tow.status.toLowerCase().replaceAll(" ", "-")}`}>
+                      {tow.status}
+                    </span>
+                    <p className="label">Provider</p>
+                    <strong>{tow.provider}</strong>
+                  </div>
 
-        {(state === "accepted" ||
-          state === "on-my-way" ||
-          state === "arrived" ||
-          state === "picked-up") && (
-          <section className="active-job">
-            <div className="active-job-top">
+                  <div className="money">
+                    <strong>{tow.total}</strong>
+                    <span>{tow.deposit}</span>
+                    <span>{tow.balance}</span>
+                  </div>
+
+                  <button className={tow.action === "Assign provider" ? "orange-button" : "neutral-button"}>
+                    {tow.action}
+                  </button>
+                </article>
+              ))}
+            </section>
+          </>
+        ) : (
+          <>
+            <header className="heading">
               <div>
-                <p className="eyebrow">ACTIVE TOW</p>
-                <h1>
-                  {state === "accepted" && "Job accepted"}
-                  {state === "on-my-way" && "On your way"}
-                  {state === "arrived" && "You have arrived"}
-                  {state === "picked-up" && "Vehicle picked up"}
-                </h1>
+                <p className="eyebrow">OWNER REVIEW</p>
+                <h1>Provider approvals</h1>
+                <p>Only approved providers can receive towing alerts.</p>
               </div>
-              <span className="payout">Payout $119</span>
-            </div>
+            </header>
 
-            <div className="route-card">
-              <div>
-                <span className="route-label">Pickup</span>
-                <strong>1234 Main Street, Garland, TX</strong>
-              </div>
-              <div className="route-line" />
-              <div>
-                <span className="route-label">Drop-off</span>
-                <strong>5678 Service Road, Garland, TX</strong>
-              </div>
-            </div>
+            <section className="approval-list">
+              <article>
+                <div className="initial">D</div>
+                <div>
+                  <strong>Dallas Quick Tow</strong>
+                  <p>Flatbed · Garland and surrounding areas</p>
+                </div>
+                <div className="checks">
+                  <span>✓ TDLR checked</span>
+                  <span>✓ On-hook coverage submitted</span>
+                  <span>✓ Truck permit submitted</span>
+                </div>
+                <button className="orange-button">Approve provider</button>
+              </article>
 
-            {state === "on-my-way" && (
-              <p className="tracking-note">
-                Customer can see your en-route location until you mark Arrived.
-              </p>
-            )}
-
-            {state === "arrived" && (
-              <p className="tracking-note">
-                Customer location tracking has stopped. The remaining customer balance is now charged.
-              </p>
-            )}
-
-            {state === "picked-up" && (
-              <p className="tracking-note">
-                Customer sees: “Your vehicle is being transported.” Your live location is not shared.
-              </p>
-            )}
-
-            <button className="primary next-action" onClick={advanceJob}>
-              {nextAction}
-            </button>
-          </section>
-        )}
-
-        {state === "dropped-off" && (
-          <div className="empty-state complete">
-            <span className="bolt">⚡</span>
-            <p className="eyebrow">TOW COMPLETED</p>
-            <h1>Job closed.</h1>
-            <p>
-              The customer can now leave a review. Customer location and conversation access are closed for this completed job.
-            </p>
-            <button className="primary" onClick={() => setState("available")}>
-              Return to available
-            </button>
-          </div>
+              <article>
+                <div className="initial">S</div>
+                <div>
+                  <strong>Smith Roadside</strong>
+                  <p>Tow dolly · Garland area</p>
+                </div>
+                <div className="checks">
+                  <span>✓ TDLR checked</span>
+                  <span>• Insurance review needed</span>
+                  <span>✓ Driver license submitted</span>
+                </div>
+                <button className="neutral-button">Request information</button>
+              </article>
+            </section>
+          </>
         )}
       </section>
 
       <style jsx global>{`
-        :root {
-          --navy: #142e48;
-          --orange: #ff7024;
-          --cream: #f4ede2;
-          --surface: #fffaf3;
-          --muted: #60717f;
-          --line: #d8cbbb;
-        }
         * { box-sizing: border-box; }
-        body {
-          margin: 0;
-          background: var(--cream);
-          color: var(--navy);
-          font-family: "Avenir Next", Avenir, Helvetica, sans-serif;
+        body { margin: 0; background: #f4efe5; color: #17212a; font-family: Arial, sans-serif; }
+        button { font: inherit; cursor: pointer; }
+        .dashboard { display: grid; grid-template-columns: 245px 1fr; min-height: 100vh; }
+        .sidebar { display: flex; flex-direction: column; padding: 26px 18px; background: #17212a; color: #fff7e8; }
+        .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 30px; }
+        .brand > span { display: grid; place-items: center; width: 39px; height: 39px; background: #e67024; color: #17212a; font-size: 13px; font-weight: 900; }
+        .brand strong, .brand small { display: block; letter-spacing: .08em; }
+        .brand strong { font-size: 13px; }
+        .brand small { margin-top: 3px; color: #aeb8b9; font-size: 9px; }
+        nav { display: grid; gap: 5px; }
+        nav button { display: flex; justify-content: space-between; padding: 13px 12px; border: 0; background: transparent; color: #c8cfcb; text-align: left; }
+        nav .selected-nav { background: #263540; color: #fff7e8; }
+        nav b { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: #e67024; color: #17212a; font-size: 11px; }
+        .sidebar-note { display: flex; gap: 9px; margin-top: auto; padding: 15px 10px 0; border-top: 1px solid rgba(255,255,255,.13); color: #b9c0bc; font-size: 12px; line-height: 1.5; }
+        .sidebar-note p { margin: 0; }
+        .sidebar-note span { color: #e67024; }
+        .workspace { padding: 42px clamp(20px,4vw,62px); }
+        .heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 31px; }
+        .eyebrow { margin: 0 0 9px; color: #bd571c; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+        h1, h2, p { margin-top: 0; }
+        h1 { margin-bottom: 9px; font-size: clamp(31px,4vw,48px); line-height: .98; letter-spacing: -.055em; }
+        h2 { margin-bottom: 5px; font-size: 19px; }
+        .heading > div > p:not(.eyebrow) { color: #63706d; line-height: 1.5; }
+        .account, .neutral-button, .orange-button { padding: 10px 12px; font-size: 12px; font-weight: 900; white-space: nowrap; }
+        .account, .neutral-button { border: 1px solid #bdb4a3; background: transparent; color: #24312f; }
+        .orange-button, .urgent-button { border: 0; background: #e67024; color: #17212a; }
+        .metrics { display: grid; grid-template-columns: repeat(4,1fr); margin-bottom: 22px; border: 1px solid #d7cfbd; background: #fbf6eb; }
+        .metrics div { display: grid; gap: 8px; padding: 19px; border-right: 1px solid #d7cfbd; }
+        .metrics div:last-child { border-right: 0; }
+        .metrics span, .money span, .label { color: #68716c; font-size: 12px; }
+        .metrics strong { font-size: 28px; letter-spacing: -.04em; }
+        .metrics .attention { background: #fff0e3; }
+        .urgent-lane { display: grid; grid-template-columns: 1.4fr .9fr auto; gap: 24px; align-items: center; margin-bottom: 24px; padding: 23px; border: 2px solid #cf5520; background: #fff0e3; }
+        .urgent-lane.recovery { border-color: #4c7655; background: #e9f2e7; }
+        .urgent-lane p:not(.eyebrow) { margin-bottom: 0; color: #663218; line-height: 1.45; }
+        .urgent-lane.recovery p:not(.eyebrow) { color: #35553c; }
+        .countdown { display: grid; gap: 4px; padding: 14px; background: #17212a; color: #fff7e8; }
+        .countdown span, .countdown small { color: #c4cfca; font-size: 11px; }
+        .countdown strong { color: #f2a353; font-size: 26px; letter-spacing: -.04em; }
+        .countdown.success strong { color: #9ed4aa; }
+        .urgent-button { padding: 12px 14px; font-weight: 900; }
+        .filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
+        .filter-row button { padding: 9px 11px; border: 1px solid #d0c8b8; background: transparent; color: #4f5c59; font-size: 13px; font-weight: 700; }
+        .filter-row .filter-active { border-color: #17212a; background: #17212a; color: #fff7e8; }
+        .tow-list, .approval-list { display: grid; gap: 10px; }
+        .tow-row { display: grid; grid-template-columns: 1.5fr .9fr .8fr auto; gap: 20px; align-items: center; padding: 18px; border: 1px solid #d6cfbf; background: #fbf6eb; }
+        .job-id { color: #65716d; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
+        .tow-main h2 { margin: 9px 0 5px; }
+        .tow-main p { margin-bottom: 7px; color: #63706d; font-size: 12px; }
+        .route { font-size: 12px; }
+        .status { display: inline-flex; width: fit-content; padding: 5px 8px; margin-bottom: 10px; font-size: 10px; font-weight: 900; }
+        .providers-alerted { background: #f8d6b9; color: #803812; }
+        .picked-up { background: #d8d8ea; color: #40406f; }
+        .new-request { background: #ded3bf; color: #514838; }
+        .money { display: grid; gap: 5px; }
+        .money > strong { font-size: 16px; }
+        .approval-list article { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 20px; align-items: center; padding: 20px; border: 1px solid #d6cfbf; background: #fbf6eb; }
+        .approval-list p { margin: 5px 0 0; color: #64706c; font-size: 12px; }
+        .initial { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 50%; background: #17212a; color: #f2a353; font-weight: 900; }
+        .checks { display: grid; gap: 5px; color: #64706c; font-size: 12px; }
+        @media (max-width: 1000px) {
+          .dashboard { grid-template-columns: 1fr; }
+          .sidebar { padding: 16px 20px; }
+          .brand { padding-bottom: 14px; }
+          nav { display: flex; }
+          .sidebar-note { display: none; }
+          .urgent-lane, .tow-row { grid-template-columns: 1fr 1fr; }
         }
-        button { font: inherit; }
-        .provider-app { min-height: 100vh; padding: 28px; }
-        .provider-topbar {
-          max-width: 880px;
-          margin: auto;
-          padding-bottom: 20px;
-          border-bottom: 1px solid var(--line);
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .provider-brand {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          text-decoration: none;
-          color: var(--navy);
-        }
-        .provider-brand > span, .bolt {
-          color: var(--orange);
-          font-size: 32px;
-        }
-        .provider-brand strong, .provider-brand small { display: block; }
-        .provider-brand strong { font-size: 15px; letter-spacing: .04em; }
-        .provider-brand small {
-          color: var(--muted);
-          text-transform: uppercase;
-          font-weight: 800;
-          font-size: 11px;
-          letter-spacing: .08em;
-        }
-        .verified {
-          background: #dff2e6;
-          color: #17653a;
-          padding: 9px 11px;
-          font-size: 12px;
-          font-weight: 800;
-        }
-        .provider-shell {
-          max-width: 880px;
-          margin: 72px auto;
-        }
-        .empty-state, .job-alert, .active-job {
-          background: var(--surface);
-          border: 1px solid var(--line);
-          padding: 46px;
-          box-shadow: 10px 10px 0 #c6bbae;
-        }
-        .empty-state { max-width: 650px; }
-        .eyebrow {
-          color: #dc581b;
-          font-size: 12px;
-          font-weight: 900;
-          letter-spacing: .12em;
-          margin: 0 0 14px;
-        }
-        h1 {
-          margin: 0;
-          font-size: clamp(36px, 6vw, 58px);
-          line-height: .98;
-          letter-spacing: -.05em;
-        }
-        p:not(.eyebrow) {
-          color: var(--muted);
-          max-width: 58ch;
-          font-size: 18px;
-          line-height: 1.55;
-        }
-        .primary {
-          display: block;
-          border: 2px solid var(--navy);
-          background: var(--orange);
-          color: #fffaf3;
-          font-weight: 850;
-          padding: 16px 22px;
-          box-shadow: 5px 5px 0 var(--navy);
-          cursor: pointer;
-          margin-top: 28px;
-        }
-        .text-button {
-          border: 0;
-          color: var(--navy);
-          background: transparent;
-          font-weight: 800;
-          margin-top: 25px;
-          padding: 0;
-          cursor: pointer;
-        }
-        .job-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 1px;
-          background: var(--line);
-          border: 1px solid var(--line);
-          margin: 32px 0 24px;
-        }
-        .info {
-          background: #fffdf8;
-          min-height: 108px;
-          padding: 18px;
-        }
-        .info span {
-          color: var(--muted);
-          font-size: 13px;
-          display: block;
-          margin-bottom: 8px;
-        }
-        .info strong { font-size: 17px; line-height: 1.35; }
-        .info.emphasis strong { color: #d65318; font-size: 24px; }
-        .notice, .tracking-note {
-          background: #fff0e7;
-          color: #884018 !important;
-          padding: 16px;
-          font-size: 15px !important;
-          font-weight: 700;
-        }
-        .active-job-top {
-          display: flex;
-          justify-content: space-between;
-          gap: 18px;
-          align-items: flex-start;
-        }
-        .payout {
-          background: var(--navy);
-          color: #fffaf3;
-          padding: 12px;
-          font-weight: 850;
-          white-space: nowrap;
-        }
-        .route-card {
-          background: var(--navy);
-          color: #fffaf3;
-          margin: 32px 0 20px;
-          padding: 24px;
-        }
-        .route-card div:not(.route-line) {
-          display: grid;
-          gap: 7px;
-        }
-        .route-label {
-          color: #ffa273;
-          font-size: 12px;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: .1em;
-        }
-        .route-line {
-          width: 1px;
-          height: 25px;
-          background: #7190a6;
-          margin: 12px 0 12px 7px;
-        }
-        .next-action { margin-left: auto; }
-        .complete { text-align: center; margin: auto; }
-        .complete p { margin-left: auto; margin-right: auto; }
-        @media (max-width: 640px) {
-          .provider-app { padding: 18px; }
-          .provider-shell { margin: 44px auto; }
-          .empty-state, .job-alert, .active-job { padding: 30px 22px; box-shadow: 7px 7px 0 #c6bbae; }
-          .job-grid { grid-template-columns: 1fr; }
-          .active-job-top { display: grid; }
-          .next-action { margin-left: 0; }
-          .verified { font-size: 10px; }
+        @media (max-width: 620px) {
+          .workspace { padding: 28px 16px; }
+          .heading { display: block; }
+          .account { margin-top: 18px; }
+          .metrics { grid-template-columns: 1fr 1fr; }
+          .metrics div:nth-child(2) { border-right: 0; }
+          .metrics div:nth-child(-n+2) { border-bottom: 1px solid #d7cfbd; }
+          .urgent-lane, .tow-row, .approval-list article { grid-template-columns: 1fr; gap: 13px; }
+          .urgent-lane button, .tow-row button { width: 100%; }
         }
       `}</style>
     </main>
-  );
-}
-
-function Info({
-  label,
-  value,
-  emphasis = false,
-}: {
-  label: string;
-  value: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className={`info ${emphasis ? "emphasis" : ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
