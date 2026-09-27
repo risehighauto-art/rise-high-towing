@@ -1,873 +1,588 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { useState } from "react";
 
-type Area = "local" | "adjacent";
-type Vehicle = "Car" | "SUV" | "Pickup";
-type Condition = "Rolls" | "Does not roll";
-type Screen = "home" | "request" | "review" | "success" | "provider";
+const total = 139;
+const deposit = total * 0.25;
+const remaining = total - deposit;
 
-const pricing = {
-  local: {
-    label: "Local service area",
-    total: 139,
-    miles: "Up to 7 loaded miles",
-    payout: 119,
-    platform: 20,
-  },
-  adjacent: {
-    label: "Adjacent service area",
-    total: 179,
-    miles: "Up to 15 loaded miles",
-    payout: 154,
-    platform: 25,
-  },
-};
+const money = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+
+const addressFields = [
+  { key: "number", title: "What is the street number?", placeholder: "Example: 1234", optional: false },
+  { key: "street", title: "What is the street name?", placeholder: "Example: Main Street", optional: false },
+  { key: "unit", title: "Apartment, suite, or building number?", placeholder: "Optional", optional: true },
+  { key: "state", title: "What state is this in?", placeholder: "Example: Texas", optional: false },
+  { key: "city", title: "What city is this in?", placeholder: "Example: Garland", optional: false },
+  { key: "zip", title: "What is the ZIP code?", placeholder: "Example: 75040", optional: false },
+];
+
+type View =
+  | "home"
+  | "location-choice"
+  | "address-field"
+  | "vehicle"
+  | "condition"
+  | "price"
+  | "deposit"
+  | "request-sent"
+  | "review-needed";
 
 export default function Home() {
-  const [screen, setScreen] = useState<Screen>("home");
-  const [area, setArea] = useState<Area>("local");
-  const [vehicle, setVehicle] = useState<Vehicle>("Car");
-  const [condition, setCondition] = useState<Condition>("Rolls");
-  const [pickup, setPickup] = useState("");
-  const [destination, setDestination] = useState("");
-  const [providerAvailable, setProviderAvailable] = useState(true);
-  const [jobAccepted, setJobAccepted] = useState(false);
+  const [view, setView] = useState<View>("home");
+  const [locationTarget, setLocationTarget] = useState<"pickup" | "dropoff">("pickup");
+  const [addressIndex, setAddressIndex] = useState(0);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [vehicle, setVehicle] = useState("");
+  const [condition, setCondition] = useState("");
+  const [addressValues, setAddressValues] = useState<Record<string, string>>({});
 
-  const quote = useMemo(() => pricing[area], [area]);
-  const needsReview = condition === "Does not roll";
+  const field = addressFields[addressIndex];
+  const locationLabel = locationTarget === "pickup" ? "pickup" : "drop-off";
 
-  function startRequest() {
-    setScreen("request");
+  function beginTowRequest() {
+    setView("location-choice");
+    setLocationTarget("pickup");
+    setAddressIndex(0);
   }
 
-  function reviewRequest(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function chooseManualAddress() {
+    setLocationMessage("");
+    setAddressIndex(0);
+    setView("address-field");
+  }
 
-    if (!pickup.trim() || !destination.trim()) {
+  function finishLocation() {
+    if (locationTarget === "pickup") {
+      setLocationTarget("dropoff");
+      setAddressIndex(0);
+      setView("location-choice");
       return;
     }
 
-    setScreen("review");
+    setView("vehicle");
   }
 
-  function submitRequest() {
-    setScreen("success");
+  function shareLocation() {
+    setLocationMessage("Requesting your location…");
+
+    if (!navigator.geolocation) {
+      setLocationMessage("Location sharing is unavailable on this device. Enter the address manually.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        setLocationMessage("Location shared.");
+        window.setTimeout(finishLocation, 600);
+      },
+      () => {
+        setLocationMessage("Location permission was not allowed. Enter the address manually.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   }
+
+  function continueAddress() {
+    if (!field.optional && !addressValues[`${locationTarget}-${field.key}`]?.trim()) return;
+
+    if (addressIndex < addressFields.length - 1) {
+      setAddressIndex((value) => value + 1);
+      return;
+    }
+
+    finishLocation();
+  }
+
+  function goBack() {
+    if (view === "location-choice") {
+      if (locationTarget === "dropoff") {
+        setLocationTarget("pickup");
+        setAddressIndex(addressFields.length - 1);
+        setView("address-field");
+      } else {
+        setView("home");
+      }
+      return;
+    }
+
+    if (view === "address-field") {
+      if (addressIndex > 0) {
+        setAddressIndex((value) => value - 1);
+      } else {
+        setView("location-choice");
+      }
+      return;
+    }
+
+    if (view === "vehicle") {
+      setLocationTarget("dropoff");
+      setAddressIndex(addressFields.length - 1);
+      setView("address-field");
+      return;
+    }
+
+    if (view === "condition") {
+      setView("vehicle");
+      return;
+    }
+
+    if (view === "price") {
+      setView("condition");
+      return;
+    }
+
+    if (view === "deposit") {
+      setView("price");
+    }
+  }
+
+  const progress = {
+    "location-choice": "Step 1 of 6",
+    "address-field": "Location details",
+    vehicle: "Step 3 of 6",
+    condition: "Step 4 of 6",
+    price: "Step 5 of 6",
+    deposit: "Step 6 of 6",
+  }[view];
 
   return (
-    <main className="rt-app">
-      <style jsx global>{`
-        :root {
-          --ink: #0b1420;
-          --navy: #102b46;
-          --orange: #f26a21;
-          --cream: #f7f1e8;
-          --paper: #fffdf9;
-          --slate: #526170;
-          --line: #d9d5ce;
-          --success: #176b4a;
-        }
-
-        * {
-          box-sizing: border-box;
-        }
-
-        body {
-          margin: 0;
-          background: var(--cream);
-          color: var(--ink);
-          font-family: Arial, Helvetica, sans-serif;
-        }
-
-        button,
-        input {
-          font: inherit;
-        }
-
-        button {
-          cursor: pointer;
-        }
-
-        .rt-app {
-          min-height: 100vh;
-          background:
-            radial-gradient(circle at 92% 6%, rgba(242, 106, 33, 0.15), transparent 24rem),
-            var(--cream);
-        }
-
-        .rt-shell {
-          width: min(1120px, calc(100% - 32px));
-          margin: 0 auto;
-        }
-
-        .rt-nav {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 20px;
-          min-height: 78px;
-          border-bottom: 1px solid rgba(16, 43, 70, 0.16);
-        }
-
-        .rt-brand {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          color: var(--navy);
-          font-size: 1rem;
-          font-weight: 900;
-          letter-spacing: -0.04em;
-        }
-
-        .rt-brand-mark {
-          display: grid;
-          place-items: center;
-          width: 32px;
-          height: 32px;
-          color: var(--paper);
-          background: var(--orange);
-          clip-path: polygon(45% 0, 100% 0, 65% 43%, 96% 43%, 30% 100%, 48% 57%, 10% 57%);
-        }
-
-        .rt-brand span:last-child {
-          display: block;
-          font-size: 0.68rem;
-          letter-spacing: 0.12em;
-          color: var(--slate);
-        }
-
-        .rt-text-button {
-          border: 0;
-          padding: 9px 0;
-          color: var(--navy);
-          background: transparent;
-          font-weight: 800;
-        }
-
-        .rt-home {
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          gap: 48px;
-          align-items: center;
-          padding: 76px 0 58px;
-        }
-
-        .rt-eyebrow {
-          margin: 0 0 14px;
-          color: var(--orange);
-          font-size: 0.72rem;
-          font-weight: 900;
-          letter-spacing: 0.13em;
-          text-transform: uppercase;
-        }
-
-        h1,
-        h2,
-        h3,
-        p {
-          margin-top: 0;
-        }
-
-        h1 {
-          max-width: 760px;
-          margin-bottom: 20px;
-          color: var(--navy);
-          font-size: clamp(2.75rem, 6vw, 5.5rem);
-          line-height: 0.93;
-          letter-spacing: -0.075em;
-        }
-
-        h2 {
-          color: var(--navy);
-          font-size: clamp(2rem, 4vw, 3.5rem);
-          line-height: 0.98;
-          letter-spacing: -0.06em;
-        }
-
-        .rt-lead {
-          max-width: 58ch;
-          color: var(--slate);
-          font-size: 1.08rem;
-          line-height: 1.65;
-        }
-
-        .rt-primary {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 54px;
-          border: 0;
-          padding: 0 22px;
-          color: var(--paper);
-          background: var(--orange);
-          font-weight: 900;
-          box-shadow: 5px 5px 0 var(--navy);
-        }
-
-        .rt-primary:hover {
-          transform: translate(-2px, -2px);
-          box-shadow: 7px 7px 0 var(--navy);
-        }
-
-        .rt-primary:focus-visible,
-        .rt-text-button:focus-visible,
-        .rt-option:focus-visible {
-          outline: 3px solid var(--orange);
-          outline-offset: 3px;
-        }
-
-        .rt-note {
-          margin: 20px 0 0;
-          color: var(--slate);
-          font-size: 0.88rem;
-        }
-
-        .rt-quote-panel {
-          padding: 28px;
-          color: var(--paper);
-          background: var(--navy);
-          box-shadow: 12px 12px 0 rgba(16, 43, 70, 0.16);
-        }
-
-        .rt-quote-panel h3 {
-          margin-bottom: 6px;
-          font-size: 1.55rem;
-          letter-spacing: -0.05em;
-        }
-
-        .rt-quote-panel p {
-          color: #cdd8e2;
-          line-height: 1.5;
-        }
-
-        .rt-price-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 17px 0;
-          border-top: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .rt-price-row strong {
-          color: #ffb078;
-          font-size: 1.35rem;
-        }
-
-        .rt-price-row span {
-          color: #cdd8e2;
-          font-size: 0.86rem;
-        }
-
-        .rt-page {
-          width: min(760px, calc(100% - 32px));
-          margin: 0 auto;
-          padding: 48px 0 72px;
-        }
-
-        .rt-back {
-          border: 0;
-          padding: 0;
-          color: var(--navy);
-          background: transparent;
-          font-weight: 800;
-        }
-
-        .rt-form-card,
-        .rt-success-card,
-        .rt-provider-card {
-          margin-top: 28px;
-          padding: clamp(22px, 4vw, 38px);
-          background: var(--paper);
-          border: 1px solid var(--line);
-          box-shadow: 8px 8px 0 rgba(16, 43, 70, 0.08);
-        }
-
-        .rt-section {
-          margin-top: 30px;
-        }
-
-        .rt-section-label {
-          display: block;
-          margin-bottom: 10px;
-          color: var(--navy);
-          font-size: 0.78rem;
-          font-weight: 900;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-        }
-
-        .rt-input {
-          width: 100%;
-          min-height: 54px;
-          border: 1px solid var(--line);
-          padding: 0 15px;
-          color: var(--ink);
-          background: #fff;
-        }
-
-        .rt-input:focus {
-          border-color: var(--orange);
-          outline: 3px solid rgba(242, 106, 33, 0.16);
-        }
-
-        .rt-options {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-        }
-
-        .rt-options.two {
-          grid-template-columns: repeat(2, 1fr);
-        }
-
-        .rt-option {
-          min-height: 52px;
-          border: 1px solid var(--line);
-          padding: 12px;
-          color: var(--navy);
-          background: #fff;
-          font-weight: 800;
-        }
-
-        .rt-option.active {
-          border-color: var(--navy);
-          color: var(--paper);
-          background: var(--navy);
-        }
-
-        .rt-callout {
-          margin-top: 22px;
-          padding: 16px;
-          color: #71451f;
-          background: #fff0df;
-          line-height: 1.5;
-        }
-
-        .rt-review-price {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 20px;
-          margin: 26px 0;
-          padding: 22px 0;
-          border-top: 2px solid var(--navy);
-          border-bottom: 1px solid var(--line);
-        }
-
-        .rt-review-price span {
-          display: block;
-          color: var(--slate);
-          font-size: 0.9rem;
-        }
-
-        .rt-review-price strong {
-          color: var(--orange);
-          font-size: 3rem;
-          letter-spacing: -0.07em;
-        }
-
-        .rt-detail-list {
-          display: grid;
-          gap: 12px;
-          padding: 0;
-          margin: 0 0 28px;
-          list-style: none;
-        }
-
-        .rt-detail-list li {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          padding-bottom: 12px;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .rt-detail-list span {
-          color: var(--slate);
-        }
-
-        .rt-timeline {
-          display: grid;
-          gap: 0;
-          margin: 30px 0;
-        }
-
-        .rt-step {
-          display: grid;
-          grid-template-columns: 32px 1fr;
-          gap: 14px;
-          align-items: center;
-          min-height: 60px;
-        }
-
-        .rt-step-dot {
-          display: grid;
-          place-items: center;
-          width: 28px;
-          height: 28px;
-          color: var(--paper);
-          background: var(--navy);
-          border-radius: 50%;
-          font-size: 0.75rem;
-          font-weight: 900;
-        }
-
-        .rt-step.pending .rt-step-dot {
-          color: var(--slate);
-          background: #ded9d0;
-        }
-
-        .rt-step small {
-          display: block;
-          margin-top: 3px;
-          color: var(--slate);
-        }
-
-        .rt-provider-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-        }
-
-        .rt-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          color: var(--success);
-          font-size: 0.9rem;
-          font-weight: 900;
-        }
-
-        .rt-status-dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: currentColor;
-        }
-
-        .rt-secondary {
-          min-height: 44px;
-          border: 1px solid var(--navy);
-          padding: 0 16px;
-          color: var(--navy);
-          background: transparent;
-          font-weight: 900;
-        }
-
-        .rt-job {
-          margin-top: 26px;
-          padding-top: 24px;
-          border-top: 1px solid var(--line);
-        }
-
-        .rt-job-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 14px;
-          margin: 20px 0;
-        }
-
-        .rt-job-grid div {
-          padding: 14px;
-          background: #f2eee7;
-        }
-
-        .rt-job-grid span {
-          display: block;
-          margin-bottom: 5px;
-          color: var(--slate);
-          font-size: 0.75rem;
-          font-weight: 800;
-          letter-spacing: 0.07em;
-          text-transform: uppercase;
-        }
-
-        .rt-job-actions {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-
-        @media (max-width: 760px) {
-          .rt-home {
-            grid-template-columns: 1fr;
-            gap: 34px;
-            padding-top: 48px;
-          }
-
-          .rt-nav {
-            min-height: 68px;
-          }
-
-          .rt-options {
-            grid-template-columns: 1fr;
-          }
-
-          .rt-options.two {
-            grid-template-columns: 1fr;
-          }
-
-          .rt-job-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .rt-review-price {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-        }
-      `}</style>
-
-      <div className="rt-shell">
-        <header className="rt-nav">
-          <div className="rt-brand" aria-label="Rise High Towing">
-            <span className="rt-brand-mark" aria-hidden="true" />
-            <div>
-              RISE HIGH TOWING
-              <span>GARLAND SERVICE AREA</span>
-            </div>
+    <main className="tow-app">
+      <header className="topbar">
+        <button className="brand" onClick={() => setView("home")} aria-label="Return home">
+          <span className="bolt">⚡</span>
+          <span>
+            <strong>RISE HIGH TOWING</strong>
+            <small>Garland service area</small>
+          </span>
+        </button>
+
+        <a className="provider-link" href="/provider-onboarding">
+          Tow provider
+        </a>
+      </header>
+
+      {view !== "home" && view !== "request-sent" && view !== "review-needed" && (
+        <div className="progress-wrap">
+          <span>{progress}</span>
+          <div className="progress-line">
+            <span
+              style={{
+                width:
+                  view === "location-choice" || view === "address-field"
+                    ? "22%"
+                    : view === "vehicle"
+                    ? "46%"
+                    : view === "condition"
+                    ? "62%"
+                    : view === "price"
+                    ? "80%"
+                    : "100%",
+              }}
+            />
           </div>
+        </div>
+      )}
 
-          <button className="rt-text-button" onClick={() => { window.location.href = "/provider-onboarding"; }}>
-
-            Tow provider
-          </button>
-        </header>
-      </div>
-
-      {screen === "home" && (
-        <section className="rt-shell rt-home">
-          <div>
-            <p className="rt-eyebrow">Clear prices. Real providers.</p>
+      {view === "home" && (
+        <section className="hero">
+          <div className="hero-copy">
+            <p className="eyebrow">CLEAR PRICE. REAL PROVIDERS.</p>
             <h1>Need a tow?</h1>
-            <p className="rt-lead">
-              Request a tow in the Garland service area. See your total before
-              sending your request.
+            <p className="intro">
+              Request towing in the Garland service area. See your exact total before requesting a provider.
             </p>
-            <button className="rt-primary" onClick={startRequest}>
+            <button className="primary-button" onClick={beginTowRequest}>
               Request a tow
             </button>
-            <p className="rt-note">
-              Standard passenger vehicles only. Recovery and special-equipment
-              jobs are reviewed before dispatch.
+            <p className="trust-note">
+              A 25% booking deposit applies to your tow. If no driver arrives, it is refunded.
             </p>
           </div>
 
-          <aside className="rt-quote-panel">
-            <p className="rt-eyebrow">Starting flat rates</p>
-            <h3>Know the price first.</h3>
-            <p>No surprise fees after a provider accepts your request.</p>
-
-            <div className="rt-price-row">
-              <div>
-                <strong>$139</strong>
-                <span>Local service area</span>
-              </div>
-              <span>Up to 7 loaded miles</span>
+          <aside className="price-card">
+            <p className="eyebrow">STARTING FLAT RATE</p>
+            <h2>Know your total first.</h2>
+            <p>No surprise charges after you approve your tow.</p>
+            <div className="price-row">
+              <strong>$139</strong>
+              <span>Local service area<br />Includes towing up to 7 miles</span>
             </div>
-
-            <div className="rt-price-row">
-              <div>
-                <strong>$179</strong>
-                <span>Adjacent service area</span>
-              </div>
-              <span>Up to 15 loaded miles</span>
+            <div className="price-row">
+              <strong>$179</strong>
+              <span>Adjacent service area<br />Includes towing up to 15 miles</span>
             </div>
           </aside>
         </section>
       )}
 
-      {screen === "request" && (
-        <section className="rt-page">
-          <button className="rt-back" onClick={() => setScreen("home")}>
-            ← Back
-          </button>
-          <p className="rt-eyebrow">Tow request</p>
-          <h2>Where does your vehicle need to go?</h2>
+      {view === "location-choice" && (
+        <section className="flow-card">
+          <p className="eyebrow">{locationTarget === "pickup" ? "PICKUP LOCATION" : "DROP-OFF LOCATION"}</p>
+          <h1>Where is the {locationLabel}?</h1>
+          <p className="helper">
+            Share your current location or enter the address one detail at a time.
+          </p>
 
-          <form className="rt-form-card" onSubmit={reviewRequest}>
-            <div className="rt-section">
-              <label className="rt-section-label" htmlFor="pickup">
-                Pickup location
-              </label>
-              <input
-                id="pickup"
-                className="rt-input"
-                placeholder="Enter pickup address"
-                value={pickup}
-                onChange={(event) => setPickup(event.target.value)}
-                required
-              />
-            </div>
+          <div className="choice-stack">
+            <button className="location-button" onClick={shareLocation}>
+              <span className="location-icon">⌖</span>
+              <span>
+                <strong>Share my location</strong>
+                <small>Fastest option on iPhone and Android</small>
+              </span>
+            </button>
 
-            <div className="rt-section">
-              <label className="rt-section-label" htmlFor="destination">
-                Destination
-              </label>
-              <input
-                id="destination"
-                className="rt-input"
-                placeholder="Enter destination address"
-                value={destination}
-                onChange={(event) => setDestination(event.target.value)}
-                required
-              />
-            </div>
+            <button className="manual-button" onClick={chooseManualAddress}>
+              Enter address manually
+            </button>
+          </div>
 
-            <div className="rt-section">
-              <span className="rt-section-label">Service area</span>
-              <div className="rt-options two">
-                <button
-                  type="button"
-                  className={`rt-option ${area === "local" ? "active" : ""}`}
-                  onClick={() => setArea("local")}
-                >
-                  Local area
-                </button>
-                <button
-                  type="button"
-                  className={`rt-option ${area === "adjacent" ? "active" : ""}`}
-                  onClick={() => setArea("adjacent")}
-                >
-                  Adjacent area
-                </button>
-              </div>
-            </div>
+          {locationMessage && <p className="location-message">{locationMessage}</p>}
 
-            <div className="rt-section">
-              <span className="rt-section-label">Vehicle type</span>
-              <div className="rt-options">
-                {(["Car", "SUV", "Pickup"] as Vehicle[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`rt-option ${vehicle === item ? "active" : ""}`}
-                    onClick={() => setVehicle(item)}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rt-section">
-              <span className="rt-section-label">Can the vehicle roll?</span>
-              <div className="rt-options two">
-                {(["Rolls", "Does not roll"] as Condition[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`rt-option ${condition === item ? "active" : ""}`}
-                    onClick={() => setCondition(item)}
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {needsReview && (
-              <div className="rt-callout">
-                This request needs review before a provider is dispatched.
-                Recovery, winching, special equipment, and non-rolling vehicles
-                are not automatically priced.
-              </div>
-            )}
-
-            <div className="rt-section">
-              <button className="rt-primary" type="submit">
-                Review request
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      {screen === "review" && (
-        <section className="rt-page">
-          <button className="rt-back" onClick={() => setScreen("request")}>
-            ← Edit request
-          </button>
-          <p className="rt-eyebrow">Review your request</p>
-          <h2>Your price before dispatch.</h2>
-
-          <div className="rt-form-card">
-            {needsReview ? (
-              <>
-                <div className="rt-callout">
-                  Your request needs a provider review before a final price is
-                  shown. We will not charge you automatically.
-                </div>
-                <button className="rt-primary" onClick={submitRequest}>
-                  Send review request
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="rt-review-price">
-                  <div>
-                    <strong>${quote.total}</strong>
-                    <span>{quote.label}</span>
-                  </div>
-                  <span>{quote.miles}</span>
-                </div>
-
-                <ul className="rt-detail-list">
-                  <li>
-                    <span>Pickup</span>
-                    <strong>{pickup}</strong>
-                  </li>
-                  <li>
-                    <span>Destination</span>
-                    <strong>{destination}</strong>
-                  </li>
-                  <li>
-                    <span>Vehicle</span>
-                    <strong>
-                      {vehicle} · {condition}
-                    </strong>
-                  </li>
-                </ul>
-
-                <p className="rt-note">
-                  Your total is shown before a provider is asked to accept the
-                  job.
-                </p>
-
-                <button className="rt-primary" onClick={submitRequest}>
-                  Send tow request
-                </button>
-              </>
-            )}
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
           </div>
         </section>
       )}
 
-      {screen === "success" && (
-        <section className="rt-page">
-          <p className="rt-eyebrow">Request received</p>
-          <h2>We are finding an available provider.</h2>
+      {view === "address-field" && (
+        <section className="flow-card">
+          <p className="eyebrow">
+            {locationTarget === "pickup" ? "PICKUP LOCATION" : "DROP-OFF LOCATION"} · {addressIndex + 1} OF {addressFields.length}
+          </p>
+          <h1>{field.title}</h1>
+          <input
+            className="big-input"
+            autoFocus
+            value={addressValues[`${locationTarget}-${field.key}`] || ""}
+            placeholder={field.placeholder}
+            onChange={(event) =>
+              setAddressValues((current) => ({
+                ...current,
+                [`${locationTarget}-${field.key}`]: event.target.value,
+              }))
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") continueAddress();
+            }}
+          />
 
-          <div className="rt-success-card">
-            <p className="rt-lead">
-              Your request has been sent. This demo does not dispatch a real
-              provider yet.
-            </p>
-
-            <div className="rt-timeline">
-              <div className="rt-step">
-                <span className="rt-step-dot">1</span>
-                <div>
-                  <strong>Request received</strong>
-                  <small>Your details are ready for provider matching.</small>
-                </div>
-              </div>
-              <div className="rt-step pending">
-                <span className="rt-step-dot">2</span>
-                <div>
-                  <strong>Provider assigned</strong>
-                  <small>Waiting for an approved provider.</small>
-                </div>
-              </div>
-              <div className="rt-step pending">
-                <span className="rt-step-dot">3</span>
-                <div>
-                  <strong>On the way</strong>
-                  <small>You will see this after a provider accepts.</small>
-                </div>
-              </div>
-              <div className="rt-step pending">
-                <span className="rt-step-dot">4</span>
-                <div>
-                  <strong>Arrived</strong>
-                  <small>The provider confirms arrival.</small>
-                </div>
-              </div>
-              <div className="rt-step pending">
-                <span className="rt-step-dot">5</span>
-                <div>
-                  <strong>Tow complete</strong>
-                  <small>Your completed service record will appear here.</small>
-                </div>
-              </div>
-            </div>
-
-            <button className="rt-secondary" onClick={() => setScreen("home")}>
-              Return home
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
+            <button className="primary-button" onClick={continueAddress}>
+              {field.optional ? "Skip or continue" : "Continue"}
             </button>
           </div>
         </section>
       )}
 
-      {screen === "provider" && (
-        <section className="rt-page">
-          <button className="rt-back" onClick={() => setScreen("home")}>
-            ← Customer view
-          </button>
-          <p className="rt-eyebrow">Tow provider preview</p>
-          <h2>See the payout before you accept.</h2>
-
-          <div className="rt-provider-card">
-            <div className="rt-provider-head">
-              <div>
-                <h3>Availability</h3>
-                <div className="rt-status">
-                  <span className="rt-status-dot" />
-                  {providerAvailable ? "Available for requests" : "Unavailable"}
-                </div>
-              </div>
-
+      {view === "vehicle" && (
+        <section className="flow-card">
+          <p className="eyebrow">YOUR VEHICLE</p>
+          <h1>What type of vehicle needs towing?</h1>
+          <div className="option-grid">
+            {["Car", "SUV", "Pickup truck", "Motorcycle"].map((item) => (
               <button
-                className="rt-secondary"
-                onClick={() => setProviderAvailable((value) => !value)}
+                key={item}
+                className={`option ${vehicle === item ? "selected" : ""}`}
+                onClick={() => setVehicle(item)}
               >
-                Set {providerAvailable ? "unavailable" : "available"}
+                {item}
               </button>
-            </div>
+            ))}
+          </div>
 
-            <div className="rt-job">
-              <p className="rt-eyebrow">Incoming request</p>
-              <h3>{jobAccepted ? "Job accepted" : "Local area tow"}</h3>
-
-              <div className="rt-job-grid">
-                <div>
-                  <span>Pickup area</span>
-                  Garland service area
-                </div>
-                <div>
-                  <span>Destination area</span>
-                  Local service area
-                </div>
-                <div>
-                  <span>Vehicle</span>
-                  Car · Rolls
-                </div>
-                <div>
-                  <span>Your payout</span>
-                  $119
-                </div>
-              </div>
-
-              <div className="rt-job-actions">
-                {jobAccepted ? (
-                  <button className="rt-primary" onClick={() => setJobAccepted(false)}>
-                    Mark unavailable
-                  </button>
-                ) : (
-                  <>
-                    <button className="rt-primary" onClick={() => setJobAccepted(true)}>
-                      Accept job
-                    </button>
-                    <button className="rt-secondary">Decline</button>
-                  </>
-                )}
-              </div>
-            </div>
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
+            <button className="primary-button" disabled={!vehicle} onClick={() => setView("condition")}>
+              Continue
+            </button>
           </div>
         </section>
       )}
+
+      {view === "condition" && (
+        <section className="flow-card">
+          <p className="eyebrow">VEHICLE CONDITION</p>
+          <h1>Can the vehicle roll and steer?</h1>
+          <div className="option-stack">
+            <button className={`option ${condition === "rolling" ? "selected" : ""}`} onClick={() => setCondition("rolling")}>
+              Yes, it rolls and steers
+            </button>
+            <button className={`option ${condition === "notRolling" ? "selected" : ""}`} onClick={() => setCondition("notRolling")}>
+              No, it does not roll
+            </button>
+            <button className={`option ${condition === "special" ? "selected" : ""}`} onClick={() => setCondition("special")}>
+              It needs recovery or special equipment
+            </button>
+          </div>
+
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
+            <button
+              className="primary-button"
+              disabled={!condition}
+              onClick={() => setView(condition === "rolling" ? "price" : "review-needed")}
+            >
+              Continue
+            </button>
+          </div>
+        </section>
+      )}
+
+      {view === "price" && (
+        <section className="flow-card price-review">
+          <p className="eyebrow">YOUR EXACT TOW PRICE</p>
+          <h1>{money(total)}</h1>
+          <p className="helper">Local service area tow for a {vehicle}. Includes towing up to 7 miles.</p>
+
+          <div className="breakdown">
+            <div><span>Total tow price</span><strong>{money(total)}</strong></div>
+            <div><span>Booking deposit due now, 25%</span><strong>{money(deposit)}</strong></div>
+            <div><span>Remaining balance when driver arrives</span><strong>{money(remaining)}</strong></div>
+          </div>
+
+          <p className="trust-note">
+            If no approved driver arrives, your booking deposit is automatically refunded.
+          </p>
+
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
+            <button className="primary-button" onClick={() => setView("deposit")}>
+              Approve {money(total)}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {view === "deposit" && (
+        <section className="flow-card">
+          <p className="eyebrow">SECURE BOOKING DEPOSIT</p>
+          <h1>Save your card and request a provider.</h1>
+          <p className="helper">
+            You pay {money(deposit)} now. It applies to your tow. The remaining {money(remaining)} is charged only when your driver arrives.
+          </p>
+
+          <div className="secure-panel">
+            <span>▣</span>
+            <div>
+              <strong>Secure card setup</strong>
+              <small>Your card details are handled by the payment provider, not Rise High.</small>
+            </div>
+          </div>
+
+          <p className="trust-note">
+            If no driver arrives, your {money(deposit)} booking deposit is refunded.
+          </p>
+
+          <div className="flow-actions">
+            <button className="back-button" onClick={goBack}>Back</button>
+            <button className="primary-button" onClick={() => setView("request-sent")}>
+              Pay {money(deposit)} and request provider
+            </button>
+          </div>
+        </section>
+      )}
+
+      {view === "review-needed" && (
+        <section className="flow-card success-card">
+          <span className="bolt large">⚡</span>
+          <p className="eyebrow">PRICE REVIEW NEEDED</p>
+          <h1>This tow needs review before pricing.</h1>
+          <p className="helper">
+            Non-running vehicles, recovery work, and special equipment need a verified provider review before a price is confirmed.
+          </p>
+          <button className="primary-button" onClick={() => setView("home")}>
+            Return home
+          </button>
+        </section>
+      )}
+
+      {view === "request-sent" && (
+        <section className="flow-card success-card">
+          <span className="bolt large">⚡</span>
+          <p className="eyebrow">REQUEST SENT</p>
+          <h1>We are notifying eligible providers.</h1>
+          <p className="helper">
+            Your {money(deposit)} deposit has been applied to your {money(total)} tow total. We will show your driver once one accepts the request.
+          </p>
+          <div className="status-box">
+            <strong>Status: Waiting for a provider</strong>
+            <span>You are not charged the remaining {money(remaining)} until your driver arrives.</span>
+          </div>
+        </section>
+      )}
+
+      <style jsx global>{`
+        :root {
+          --navy: #142e48;
+          --orange: #ff7024;
+          --cream: #f4ede2;
+          --surface: #fffaf3;
+          --muted: #5e7180;
+          --line: #d8cbbb;
+          --ink: #142e48;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          background: var(--cream);
+          color: var(--ink);
+          font-family: "Avenir Next", Avenir, Helvetica, sans-serif;
+        }
+        button, input { font: inherit; }
+        .tow-app { min-height: 100vh; padding: 28px; }
+        .topbar {
+          max-width: 1180px;
+          margin: auto;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding-bottom: 22px;
+          border-bottom: 1px solid var(--line);
+        }
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          background: transparent;
+          border: 0;
+          color: var(--navy);
+          padding: 0;
+          cursor: pointer;
+          text-align: left;
+        }
+        .bolt { color: var(--orange); font-size: 34px; line-height: 1; }
+        .brand strong, .brand small { display: block; }
+        .brand strong { font-size: 15px; letter-spacing: .03em; }
+        .brand small { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+        .provider-link { color: var(--navy); font-weight: 800; text-decoration: none; }
+        .progress-wrap {
+          max-width: 680px;
+          margin: 28px auto 0;
+          color: var(--muted);
+          font-size: 13px;
+          font-weight: 800;
+        }
+        .progress-line { height: 5px; background: #ddd1c1; margin-top: 9px; }
+        .progress-line span { display: block; height: 100%; background: var(--orange); transition: width .2s ease; }
+        .hero {
+          max-width: 1180px;
+          min-height: 620px;
+          margin: auto;
+          display: grid;
+          grid-template-columns: 1.15fr .85fr;
+          gap: 60px;
+          align-items: center;
+        }
+        .hero-copy { max-width: 620px; }
+        .eyebrow { color: #dc581b; font-size: 12px; font-weight: 900; letter-spacing: .12em; margin: 0 0 16px; }
+        h1 { margin: 0; font-size: clamp(42px, 7vw, 78px); line-height: .96; letter-spacing: -.05em; }
+        .intro, .helper { color: var(--muted); font-size: 18px; line-height: 1.55; max-width: 55ch; }
+        .primary-button, .back-button, .manual-button, .location-button, .option {
+          cursor: pointer;
+          border: 2px solid var(--navy);
+          font-weight: 850;
+        }
+        .primary-button {
+          background: var(--orange);
+          color: #fffaf3;
+          padding: 16px 22px;
+          box-shadow: 5px 5px 0 var(--navy);
+        }
+        .primary-button:disabled { opacity: .45; cursor: not-allowed; }
+        .trust-note { color: var(--muted); font-size: 14px; line-height: 1.45; max-width: 440px; }
+        .price-card { background: var(--navy); color: #f7f0e7; padding: 30px; box-shadow: 12px 12px 0 #c7bcae; }
+        .price-card .eyebrow { color: #ffa273; }
+        .price-card h2 { font-size: 32px; margin: 0; letter-spacing: -.04em; }
+        .price-card p:not(.eyebrow) { color: #d4e0e7; line-height: 1.45; }
+        .price-row { display: grid; grid-template-columns: 92px 1fr; gap: 8px; padding: 18px 0; border-top: 1px solid #486077; align-items: center; }
+        .price-row strong { color: #ffae7b; font-size: 25px; }
+        .price-row span { color: #e4edf1; font-size: 14px; line-height: 1.45; }
+        .flow-card {
+          max-width: 680px;
+          margin: 68px auto;
+          background: var(--surface);
+          padding: 48px;
+          border: 1px solid var(--line);
+          box-shadow: 10px 10px 0 #c7bcae;
+        }
+        .flow-card h1 { font-size: clamp(34px, 5vw, 56px); }
+        .big-input {
+          width: 100%;
+          padding: 18px;
+          color: var(--navy);
+          font-size: 20px;
+          border: 2px solid var(--navy);
+          background: #fffdf8;
+          margin-top: 20px;
+        }
+        .choice-stack, .option-stack { display: grid; gap: 12px; margin-top: 28px; }
+        .location-button {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 20px;
+          text-align: left;
+          background: var(--navy);
+          color: #fffaf3;
+        }
+        .location-button strong, .location-button small { display: block; }
+        .location-button small { color: #d4e0e7; margin-top: 4px; }
+        .location-icon { font-size: 35px; color: #ff9a61; }
+        .manual-button, .back-button { background: transparent; color: var(--navy); padding: 15px 18px; }
+        .location-message { color: #a4471b; font-weight: 800; }
+        .option-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 28px; }
+        .option { background: #fffdf8; color: var(--navy); padding: 17px; text-align: left; }
+        .option.selected { background: #fff0e7; border-color: var(--orange); }
+        .flow-actions { display: flex; justify-content: space-between; gap: 15px; margin-top: 36px; }
+        .price-review h1 { color: var(--orange); }
+        .breakdown { margin-top: 30px; border-top: 1px solid var(--line); }
+        .breakdown div { display: flex; justify-content: space-between; gap: 20px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+        .breakdown span { color: var(--muted); }
+        .breakdown strong { text-align: right; }
+        .secure-panel {
+          display: flex;
+          gap: 15px;
+          margin-top: 28px;
+          padding: 19px;
+          background: #e5f0e9;
+          color: #1a5d3c;
+        }
+        .secure-panel span { font-size: 24px; }
+        .secure-panel strong, .secure-panel small { display: block; }
+        .secure-panel small { margin-top: 4px; line-height: 1.4; }
+        .success-card { text-align: center; }
+        .large { font-size: 58px; display: block; margin-bottom: 18px; }
+        .success-card .helper { margin: 20px auto 28px; }
+        .status-box {
+          display: grid;
+          gap: 6px;
+          text-align: left;
+          background: var(--navy);
+          color: #fffaf3;
+          padding: 19px;
+          margin-top: 26px;
+        }
+        .status-box span { color: #d4e0e7; line-height: 1.4; }
+        @media (max-width: 760px) {
+          .tow-app { padding: 18px; }
+          .hero { grid-template-columns: 1fr; min-height: auto; padding: 55px 0; gap: 44px; }
+          .price-card { box-shadow: 7px 7px 0 #c7bcae; }
+          .flow-card { margin: 42px auto; padding: 30px 22px; box-shadow: 7px 7px 0 #c7bcae; }
+        }
+        @media (max-width: 430px) {
+          .topbar { align-items: flex-start; }
+          .provider-link { font-size: 14px; padding-top: 7px; }
+          .option-grid { grid-template-columns: 1fr; }
+          .flow-actions .primary-button, .flow-actions .back-button { padding: 14px 12px; }
+        }
+      `}</style>
     </main>
   );
 }
